@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # Base de datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: magento2_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-magento}
+      MYSQL_USER: ${MYSQL_USER:-magento}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-magento}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    networks:
+      - magento-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis para caché y sesiones
+  redis:
+    image: redis:7-alpine
+    container_name: magento2_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - magento-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Elasticsearch para búsqueda
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: magento2_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_PORT_2:-9300}:9300"
+    networks:
+      - magento-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # PHP-FPM con extensiones necesarias para Magento
+  php:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    container_name: magento2_php
+    volumes:
+      - ./src:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/php.ini
+      - ./docker/php/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - magento-network
+    environment:
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT:-2G}
+      - PHP_UPLOAD_MAX_FILESIZE=${PHP_UPLOAD_MAX_FILESIZE:-64M}
+      - PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE:-64M}
+
+  # Nginx como servidor web
+  nginx:
+    image: nginx:alpine
+    container_name: magento2_nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_PORT_SSL:-443}:443"
+    volumes:
+      - ./src:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+    networks:
+      - magento-network
+
+  # Composer para descargar Magento (servicio auxiliar)
+  composer:
+    image: composer:latest
+    container_name: magento2_composer
+    volumes:
+      - ./src:/app
+      - composer_cache:/tmp/cache
+    working_dir: /app
+    networks:
+      - magento-network
+    environment:
+      - COMPOSER_AUTH=${COMPOSER_AUTH}
+    profiles:
+      - tools
+    entrypoint: ["/bin/sh", "-c"]
+
+volumes:
+  db_data:
+  redis_data:
+  elasticsearch_data:
+  composer_cache:
+
+networks:
+  magento-network:
+    driver: bridge
+
