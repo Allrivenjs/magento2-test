@@ -1,243 +1,277 @@
-# Magento 2 Docker Compose
+# Magento 2 Docker Setup
 
-Este proyecto proporciona una configuración completa de Docker Compose para ejecutar Magento 2 con todos sus servicios dependientes.
+Configuración de Docker para Magento 2 basada en [markshust/docker-magento](https://github.com/markshust/docker-magento).
 
 ## Requisitos Previos
 
-- Docker Desktop (Windows/Mac) o Docker Engine + Docker Compose (Linux)
-- Git
-- Al menos 4GB de RAM disponible
-- 10GB de espacio en disco libre
+- **Docker Desktop** (Windows/Mac) o **Docker Engine + Docker Compose** (Linux)
+- **Git Bash** (para Windows) - [Descargar Git for Windows](https://git-scm.com/download/win)
+- **Al menos 6GB de RAM** asignada a Docker
+- **10GB de espacio en disco** libre
 
 ## Configuración Inicial
 
-### 1. Clonar o descargar el proyecto
+### 1. Verificar Docker
 
-Si aún no lo has hecho, asegúrate de estar en el directorio del proyecto.
-
-### 2. Configurar variables de entorno
-
-Crea un archivo `.env` en la raíz del proyecto con las siguientes variables (o usa los valores por defecto):
-
-```env
-# Configuración de MySQL
-MYSQL_ROOT_PASSWORD=root
-MYSQL_DATABASE=magento
-MYSQL_USER=magento
-MYSQL_PASSWORD=magento
-MYSQL_PORT=3306
-
-# Configuración de Redis
-REDIS_PORT=6379
-
-# Configuración de Elasticsearch
-ELASTICSEARCH_PORT=9200
-ELASTICSEARCH_PORT_2=9300
-
-# Configuración de Nginx
-NGINX_PORT=80
-NGINX_PORT_SSL=443
-NGINX_HOST=localhost
-
-# Configuración de PHP
-PHP_MEMORY_LIMIT=2G
-PHP_UPLOAD_MAX_FILESIZE=64M
-PHP_POST_MAX_SIZE=64M
-
-# Autenticación de Composer para Magento Marketplace (opcional)
-# Formato: {"http-basic":{"repo.magento.com":{"username":"TU_PUBLIC_KEY","password":"TU_PRIVATE_KEY"}}}
-# Obtén tus claves en: https://marketplace.magento.com/customer/accessKeys/
-COMPOSER_AUTH=
-```
-
-**Importante**: Si deseas descargar la versión completa de Magento (no solo Open Source), necesitarás configurar `COMPOSER_AUTH` con tus credenciales de Magento Marketplace:
-
-1. Obtén tus claves de acceso en: https://marketplace.magento.com/customer/accessKeys/
-2. Edita el archivo `.env` y agrega:
-
-```env
-COMPOSER_AUTH={"http-basic":{"repo.magento.com":{"username":"TU_PUBLIC_KEY","password":"TU_PRIVATE_KEY"}}}
-```
-
-### 3. Iniciar los servicios
+Asegúrate de que Docker esté corriendo:
 
 ```bash
-docker-compose up -d
+docker --version
+docker compose version
 ```
 
-Este comando:
-- Descargará todas las imágenes necesarias
-- Creará los contenedores (PHP, Nginx, MySQL, Redis, Elasticsearch)
+### 2. Configurar Memoria de Docker
+
+En Docker Desktop:
+- Ve a Settings → Resources → Advanced
+- Asigna al menos **6GB de RAM**
+- Aplica los cambios
+
+### 3. Iniciar los Servicios
+
+**En Windows (PowerShell o Git Bash):**
+
+```bash
+bash bin/start
+```
+
+O usa el script de Windows:
+
+```bash
+start-docker.bat
+```
+
+**En Linux/Mac:**
+
+```bash
+./bin/start
+```
+
+Esto iniciará todos los servicios necesarios:
+- PHP 8.3-FPM
+- Nginx
+- MariaDB 11.4
+- Redis (Valkey)
+- OpenSearch 2.12
+- RabbitMQ 4.1
+- MailCatcher
 
 ### 4. Descargar Magento 2
 
-Una vez que los servicios estén corriendo, descarga Magento usando uno de estos métodos:
-
-**Opción A: Usando el script de inicialización (recomendado)**
+**Opción A: Descargar solo Magento (recomendado para empezar)**
 
 ```bash
-# En Windows (PowerShell)
-bash init-magento.sh
-
-# En Linux/Mac
-chmod +x init-magento.sh
-./init-magento.sh
+bash bin/download
 ```
 
-**Opción B: Usando Docker Compose directamente**
+Esto descargará la última versión de Magento 2 Community Edition (2.4.7-p3) en el directorio `src/`.
+
+**Opción B: Configuración completa automática**
 
 ```bash
-docker-compose run --rm composer sh -c "
-  composer create-project \
-    --repository-url=https://repo.magento.com/ \
-    magento/project-community-edition \
-    . \
-    --no-interaction \
-    --prefer-dist
-"
+bash bin/setup magento.test
 ```
 
-Esto descargará la última versión de Magento 2 en el directorio `src/`.
+Este comando:
+- Descarga Magento
+- Instala Magento
+- Configura SSL
+- Configura el dominio
+- Genera contenido estático
 
-### 5. Instalar Magento
+**Nota:** En Windows, necesitarás agregar manualmente `magento.test` a tu archivo `C:\Windows\System32\drivers\etc\hosts`:
 
-Una vez que Magento esté descargado, ejecuta la instalación:
+```
+127.0.0.1 magento.test
+```
+
+### 5. Configurar Autenticación de Composer
+
+Si necesitas descargar módulos del Marketplace de Magento, configura tus credenciales:
 
 ```bash
-docker-compose exec php bin/magento setup:install \
-  --base-url=http://localhost \
-  --db-host=db \
-  --db-name=magento \
-  --db-user=magento \
-  --db-password=magento \
-  --admin-firstname=Admin \
-  --admin-lastname=User \
-  --admin-email=admin@example.com \
-  --admin-user=admin \
-  --admin-password=Admin123 \
-  --language=en_US \
-  --currency=USD \
-  --timezone=America/New_York \
-  --use-rewrites=1 \
-  --backend-frontname=admin \
-  --elasticsearch-host=elasticsearch \
-  --elasticsearch-port=9200
+bash bin/setup-composer-auth
 ```
 
-### 6. Configurar permisos
-
-```bash
-docker-compose exec php chmod -R 777 var pub/static pub/media app/etc
-```
-
-### 7. Acceder a Magento
-
-- Frontend: http://localhost
-- Backend: http://localhost/admin
-  - Usuario: admin
-  - Contraseña: Admin123 (o la que hayas configurado)
-
-## Servicios Incluidos
-
-- **PHP 8.2-FPM**: Servidor PHP con todas las extensiones necesarias para Magento
-- **Nginx**: Servidor web
-- **MySQL 8.0**: Base de datos
-- **Redis**: Caché y sesiones
-- **Elasticsearch 8.11**: Motor de búsqueda
-- **Composer**: Para descargar e instalar Magento
+Obtén tus claves en: https://marketplace.magento.com/customer/accessKeys/
 
 ## Comandos Útiles
 
-### Ver logs
+### Gestión de Contenedores
+
 ```bash
-docker-compose logs -f [nombre_servicio]
+# Iniciar servicios
+bash bin/start
+
+# Detener servicios
+bash bin/stop
+
+# Reiniciar servicios
+bash bin/restart
+
+# Ver estado de contenedores
+bash bin/status
 ```
 
-### Ejecutar comandos de Magento
+### Comandos de Magento
+
 ```bash
-docker-compose exec php bin/magento [comando]
+# Ejecutar comandos de Magento
+bash bin/magento cache:flush
+bash bin/magento setup:upgrade
+bash bin/magento indexer:reindex
+
+# Ver versión de Magento
+bash bin/magento --version
 ```
 
-### Acceder al contenedor PHP
+### Comandos de Composer
+
 ```bash
-docker-compose exec php bash
+# Instalar dependencias
+bash bin/composer install
+
+# Actualizar dependencias
+bash bin/composer update
+
+# Requerir un módulo
+bash bin/composer require vendor/module-name
 ```
 
-### Reiniciar servicios
+### Acceso a Contenedores
+
 ```bash
-docker-compose restart
+# Acceder al contenedor PHP
+bash bin/bash
+
+# Ejecutar un comando en el contenedor
+bash bin/cli ls -la
 ```
 
-### Detener servicios
+### Permisos
+
 ```bash
-docker-compose down
+# Arreglar permisos de archivos
+bash bin/fixperms
+
+# Arreglar propietarios de archivos
+bash bin/fixowns
 ```
 
-### Detener y eliminar volúmenes (¡CUIDADO! Esto elimina la base de datos)
-```bash
-docker-compose down -v
-```
+## Acceso a Servicios
 
-## Estructura de Directorios
+Una vez configurado, puedes acceder a:
 
-```
-magento2-test/
-├── docker-compose.yml
-├── .env
-├── .env.example
-├── README.md
-├── docker/
-│   ├── nginx/
-│   │   └── default.conf
-│   └── php/
-│       ├── Dockerfile
-│       ├── php.ini
-│       └── xdebug.ini
-└── src/          # Aquí se descargará Magento
-```
+- **Magento Frontend:** https://magento.test/ (o http://localhost)
+- **Magento Admin:** https://magento.test/admin/
+  - Usuario: `john.smith` (configurable en `env/magento.env`)
+  - Contraseña: `password123` (configurable en `env/magento.env`)
+- **phpMyAdmin:** http://localhost:8080
+- **MailCatcher:** http://localhost:1080
+- **RabbitMQ Management:** http://localhost:15672
+  - Usuario: `magento`
+  - Contraseña: `magento`
+
+## Configuración
+
+### Variables de Entorno
+
+Los archivos de configuración están en la carpeta `env/`:
+
+- `env/db.env` - Configuración de base de datos
+- `env/magento.env` - Configuración de Magento (admin, locale, etc.)
+- `env/phpfpm.env` - Configuración de PHP
+- `env/opensearch.env` - Configuración de OpenSearch
+- `env/redis.env` - Configuración de Redis
+- `env/rabbitmq.env` - Configuración de RabbitMQ
+
+### Personalizar Configuración de Magento
+
+Edita `env/magento.env` para cambiar:
+- Email del administrador
+- Nombre de usuario del administrador
+- Contraseña del administrador
+- Idioma, moneda, zona horaria
 
 ## Solución de Problemas
 
+### Error: "There must be at least 6GB of RAM allocated to Docker"
+
+Aumenta la memoria asignada a Docker en Docker Desktop:
+1. Abre Docker Desktop
+2. Ve a Settings → Resources → Advanced
+3. Aumenta la memoria a al menos 6GB
+4. Aplica los cambios y reinicia Docker
+
+### Error: "The src directory is not empty"
+
+El directorio `src/` debe estar vacío antes de descargar Magento:
+
+```bash
+# En Windows (PowerShell)
+Remove-Item -Recurse -Force src\*
+# O manualmente borra el contenido de la carpeta src/
+
+# Luego intenta de nuevo
+bash bin/download
+```
+
 ### Error de permisos
-Si encuentras errores de permisos, ejecuta:
-```bash
-docker-compose exec php chmod -R 777 var pub/static pub/media app/etc
-```
-
-### Elasticsearch no inicia
-Si Elasticsearch no inicia, verifica que tengas suficiente memoria disponible. Puedes reducir el uso de memoria editando `ES_JAVA_OPTS` en `docker-compose.yml`.
-
-### Composer no puede descargar Magento
-- Verifica que `COMPOSER_AUTH` esté correctamente configurado en `.env`
-- Para la versión Open Source, no necesitas credenciales
-- Verifica los logs: `docker-compose logs composer`
-
-### Puerto ya en uso
-Si algún puerto está en uso, modifica los valores en el archivo `.env`:
-- `NGINX_PORT`: Puerto para HTTP (por defecto 80)
-- `MYSQL_PORT`: Puerto para MySQL (por defecto 3306)
-- `REDIS_PORT`: Puerto para Redis (por defecto 6379)
-- `ELASTICSEARCH_PORT`: Puerto para Elasticsearch (por defecto 9200)
-
-## Actualizar Magento
-
-Para actualizar Magento a la última versión:
 
 ```bash
-docker-compose exec php composer update
-docker-compose exec php bin/magento setup:upgrade
-docker-compose exec php bin/magento setup:di:compile
-docker-compose exec php bin/magento setup:static-content:deploy -f
-docker-compose exec php bin/magento cache:flush
+bash bin/fixperms
+bash bin/fixowns
 ```
 
-## Notas
+### Los contenedores no inician
 
-- Los datos de la base de datos se almacenan en un volumen persistente
-- Los archivos de Magento se almacenan en el directorio `src/`
-- Para desarrollo, se recomienda usar el modo developer: `bin/magento deploy:mode:set developer`
+Verifica los logs:
+
+```bash
+bash bin/docker-compose logs
+```
+
+O para un servicio específico:
+
+```bash
+bash bin/docker-compose logs phpfpm
+bash bin/docker-compose logs db
+```
+
+### OpenSearch no inicia
+
+OpenSearch requiere bastante memoria. Si falla, puedes:
+1. Aumentar la memoria de Docker
+2. O cambiar a Elasticsearch editando `compose.yaml`
+
+## Estructura del Proyecto
+
+```
+magento2-test/
+├── bin/                    # Scripts de utilidad
+├── env/                    # Archivos de configuración de entorno
+├── src/                    # Código de Magento (se crea al descargar)
+├── compose.yaml            # Configuración principal de Docker Compose
+├── compose.dev.yaml        # Configuración de desarrollo
+├── compose.healthcheck.yaml # Health checks
+├── start-docker.bat        # Script de inicio para Windows
+├── download-magento.bat    # Script de descarga para Windows
+└── setup-magento.bat       # Script de setup para Windows
+```
+
+## Notas Adicionales
+
+- Los datos de la base de datos se almacenan en volúmenes persistentes de Docker
+- Los archivos de Magento se sincronizan entre el host y el contenedor
+- Para desarrollo, se recomienda usar el modo developer: `bash bin/magento deploy:mode:set developer`
+- Los certificados SSL se generan automáticamente usando mkcert
+
+## Recursos
+
+- [Documentación oficial de docker-magento](https://github.com/markshust/docker-magento)
+- [Documentación de Magento 2](https://devdocs.magento.com/)
+- [Marketplace de Magento](https://marketplace.magento.com/)
 
 ## Licencia
 
-Este proyecto está bajo la Licencia Apache 2.0.
-
+Este proyecto está basado en [markshust/docker-magento](https://github.com/markshust/docker-magento) que está bajo licencia MIT.

@@ -1,21 +1,8 @@
-# Magento
-src/
-!src/.gitkeep
-
-# Environment
+.htaccess
 .env
+.env.local
+.env.development.local
+.env.test.local
 
-# Docker
-docker-compose.override.yml
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
+.history
